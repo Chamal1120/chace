@@ -1,6 +1,7 @@
 use crate::ai::backend::LLMBackend;
 use anyhow::Result;
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 pub struct GGPTOSSBackend {
@@ -35,8 +36,9 @@ struct MessageResponse {
     content: String,
 }
 
+#[async_trait]
 impl LLMBackend for GGPTOSSBackend {
-    fn generate_function(
+    async fn generate_function(
         &self,
         signature: &str,
         doc_comment: Option<&str>,
@@ -72,12 +74,14 @@ impl LLMBackend for GGPTOSSBackend {
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&request_body)
-            .send()?
+            .send()
+            .await?
             .error_for_status()?
-            .json::<GGPTOSSResponse>()?;
+            .json::<GGPTOSSResponse>()
+            .await?;
 
         let output = resp
-            .choices
+           .choices
             .get(0)
             .map(|c| c.message.content.clone())
             .unwrap_or_default();

@@ -1,6 +1,7 @@
 use crate::ai::backend::LLMBackend;
 use anyhow::Result;
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 /// Gemini backend implementation
@@ -9,8 +10,41 @@ pub struct GeminiBackend {
     pub model: String,
 }
 
+// Request body
+#[derive(Serialize)]
+struct GeminiRequest<'a> {
+    contents: Vec<GeminiContent<'a>>,
+}
+#[derive(Serialize)]
+struct GeminiContent<'a> {
+    role: &'a str,
+    parts: Vec<GeminiPart<'a>>,
+}
+#[derive(Serialize)]
+struct GeminiPart<'a> {
+    text: &'a str,
+}
+
+#[derive(Deserialize)]
+struct GeminiResponse {
+    candidates: Vec<GeminiCandidate>,
+}
+#[derive(Deserialize)]
+struct GeminiCandidate {
+    content: GeminiCandidateContent,
+}
+#[derive(Deserialize)]
+struct GeminiCandidateContent {
+    parts: Vec<GeminiPartResponse>,
+}
+#[derive(Deserialize)]
+struct GeminiPartResponse {
+    text: String,
+}
+
+#[async_trait]
 impl LLMBackend for GeminiBackend {
-    fn generate_function(
+    async fn generate_function(
         &self,
         signature: &str,
         doc_comment: Option<&str>,
@@ -36,38 +70,6 @@ impl LLMBackend for GeminiBackend {
             self.model
         );
 
-        // Request body
-        #[derive(Serialize)]
-        struct GeminiRequest<'a> {
-            contents: Vec<GeminiContent<'a>>,
-        }
-        #[derive(Serialize)]
-        struct GeminiContent<'a> {
-            role: &'a str,
-            parts: Vec<GeminiPart<'a>>,
-        }
-        #[derive(Serialize)]
-        struct GeminiPart<'a> {
-            text: &'a str,
-        }
-
-        #[derive(Deserialize)]
-        struct GeminiResponse {
-            candidates: Vec<GeminiCandidate>,
-        }
-        #[derive(Deserialize)]
-        struct GeminiCandidate {
-            content: GeminiCandidateContent,
-        }
-        #[derive(Deserialize)]
-        struct GeminiCandidateContent {
-            parts: Vec<GeminiPartResponse>,
-        }
-        #[derive(Deserialize)]
-        struct GeminiPartResponse {
-            text: String,
-        }
-
         let request_body = GeminiRequest {
             contents: vec![GeminiContent {
                 role: "user",
@@ -80,9 +82,11 @@ impl LLMBackend for GeminiBackend {
             .header("x-goog-api-key", &self.api_key)
             .header("Content-Type", "application/json")
             .json(&request_body)
-            .send()?
+            .send()
+            .await?
             .error_for_status()?
-            .json::<GeminiResponse>()?;
+            .json::<GeminiResponse>()
+            .await?;
 
         let output = resp
             .candidates

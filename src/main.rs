@@ -3,80 +3,139 @@ mod languages;
 use ai::backend::LLMBackend;
 use ai::gemini::GeminiBackend;
 use ai::groq_gpt_oss::GGPTOSSBackend;
-use languages::rust_backend;
-use serde_json::json;
-use std::env;
-use std::io::{self, Read};
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, split};
+use tokio::net::{UnixListener, UnixStream};
 
-fn main() {
-    let mut source_code = String::new();
-    io::stdin()
-        .read_to_string(&mut source_code)
-        .expect("Failed to read source code from stdin");
+#[derive(Deserialize)]
+struct GenerateRequest {
+    source_code: String,
+    cursor_byte: usize,
+    backend: String,
+}
 
-    let args: Vec<String> = env::args().collect();
+#[derive(Serialize)]
+struct GenerateResponse {
+    start_byte: usize,
+    end_byte: usize,
+    body: String,
+    error: Option<String>,
+}
 
-    if args.len() < 3 {
-        println!("Error: wrong args");
-        println!("Usage: chace <cursor_byte> --backend <Gemini|Groq>");
-        std::process::exit(1);
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // initialize backends
+    let gemini = Arc::new(GeminiBackend {
+        api_key: std::env::var("GEMINI_API_KEY")?,
+        model: "Gemini-2.5-flash".to_string(),
+    });
+
+    let groq = Arc::new(GGPTOSSBackend {
+        api_key: std::env::var("GROQ_API_KEY")?,
+        model: "openai/gpt-oss-20b".to_string(),
+    });
+
+    let path = "/tmp/chace.sock";
+    if Path::new(path).exists() {
+        std::fs::remove_file(path)?;
     }
 
-    let cursor_byte: usize = args
-        .last()
-        .expect("Missing cursor_byte")
-        .parse()
-        .expect("Invalid cursor_byte");
+    let listener = UnixListener::bind(path)?;
 
-    let backend_name = match args.iter().position(|a| a == "--backend") {
-        Some(i) => args.get(i + 1).map(String::as_str),
-        None => None,
-    };
+    loop {
+        let (socket, _) = listener.accept().await?;
+        let gemini = Arc::clone(&gemini);
+        let groq = Arc::clone(&groq);
 
-    let backend_name = backend_name.expect("Missing --backend");
-
-    if let Some(func) =
-        rust_backend::find_empty_function_at_cursor(&source_code, cursor_byte)
-    {
-        //let backend = GeminiBackend { api_key, model: "gemini-2.5-flash".to_string() };
-        let backend: Box<dyn LLMBackend> = match backend_name {
-            "Gemini" => {
-                let api_key =
-                    env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY not set");
-
-                Box::new(GeminiBackend {
-                    api_key,
-                    model: "Gemini-2.5-flash".to_string(),
-                })
+        tokio::spawn(async move {
+            if let Err(e) = handle_connection(socket, gemini, groq).await {
+                eprintln!("connection error: {e}");
             }
-            "groq" => {
-                let api_key =
-                    env::var("GROQ_API_KEY").expect("GROQ_API_KEY not set");
+        });
+    }
+}
 
-                Box::new(GGPTOSSBackend { api_key, model: "openai/gpt-oss-20b".to_string() })
-            }
-            _ => {
-                eprintln!("Unknown backend {}", backend_name);
-                std::process::exit(1);
+async fn handle_connection(
+    socket: UnixStream,
+    gemini: Arc<GeminiBackend>,
+    groq: Arc<GGPTOSSBackend>,
+) -> anyhow::Result<()> {
+    let (reader, mut writer) = split(socket);
+    let mut reader = BufReader::new(reader);
+    let mut line = String::new();
+
+    while reader.read_line(&mut line).await? != 0 {
+        let req: GenerateRequest = match serde_json::from_str(&line) {
+            Ok(r) => r,
+            Err(e) => {
+                writer
+                    .write_all(format!("{{\"error\":\"{e}\"}}\n").as_bytes())
+                    .await?;
+                line.clear();
+                continue;
             }
         };
 
-        let generated_body = backend
-            .generate_function(
-                &func.signature,
-                func.doc_comment.as_deref(),
-                "rust",
-            )
-            .unwrap();
+        let resp = handle_request(req, &gemini, &groq).await;
+        let json = serde_json::to_string(&resp)?;
+        writer.write_all(json.as_bytes()).await?;
+        writer.write_all(b"\n").await?;
 
-        let output_json = json!({
-            "start_byte": func.start_byte,
-            "end_byte": func.end_byte,
-            "body": generated_body,
-        });
+        line.clear();
+    }
 
-        println!("{}", output_json);
-    } else {
-        println!("No empty function");
+    Ok(())
+}
+
+async fn handle_request(
+    req: GenerateRequest,
+    gemini: &Arc<GeminiBackend>,
+    groq: &Arc<GGPTOSSBackend>,
+) -> GenerateResponse {
+    use languages::rust_backend;
+
+    let Some(func) = rust_backend::find_empty_function_at_cursor(
+        &req.source_code,
+        req.cursor_byte,
+    ) else {
+        return GenerateResponse {
+            start_byte: 0,
+            end_byte: 0,
+            body: String::new(),
+            error: Some("No empty function".into()),
+        };
+    };
+
+    let backend: &dyn LLMBackend = match req.backend.as_str() {
+        "Gemini" => gemini.as_ref(),
+        "groq" => groq.as_ref(),
+        _ => {
+            return GenerateResponse {
+                start_byte: 0,
+                end_byte: 0,
+                body: String::new(),
+                error: Some("Unknown backend".into()),
+            };
+        }
+    };
+
+    match backend
+        .generate_function(&func.signature, func.doc_comment.as_deref(), "rust")
+        .await
+    {
+        Ok(body) => GenerateResponse {
+            start_byte: func.start_byte,
+            end_byte: func.end_byte,
+            body,
+            error: None,
+        },
+        Err(e) => GenerateResponse {
+            start_byte: func.start_byte,
+            end_byte: func.end_byte,
+            body: String::new(),
+            error: Some(e.to_string()),
+        },
     }
 }
