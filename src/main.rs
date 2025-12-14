@@ -14,6 +14,8 @@ struct GenerateRequest {
     source_code: String,
     cursor_byte: usize,
     backend: String,
+    #[serde(default)]
+    context_snippets: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]
@@ -122,7 +124,12 @@ async fn handle_request(
     };
 
     match backend
-        .generate_function(&func.signature, func.doc_comment.as_deref(), "rust")
+        .generate_function(
+            &func.signature,
+            func.doc_comment.as_deref(),
+            req.context_snippets.as_deref(),
+            "rust",
+        )
         .await
     {
         Ok(body) => GenerateResponse {

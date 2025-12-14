@@ -48,6 +48,7 @@ impl LLMBackend for GeminiBackend {
         &self,
         signature: &str,
         doc_comment: Option<&str>,
+        context_snippets: Option<&[String]>,
         language: &str,
     ) -> Result<String> {
         let client = Client::new();
@@ -60,8 +61,20 @@ impl LLMBackend for GeminiBackend {
             language, language
         );
 
-        let user_prompt =
-            format!("{}\n{} {{", doc_comment.unwrap_or(""), signature);
+        let mut user_prompt = String::new();
+        
+        if let Some(snippets) = context_snippets {
+            if !snippets.is_empty() {
+                user_prompt.push_str("Context code for reference:\n");
+                for snippet in snippets {
+                    user_prompt.push_str("---\n");
+                    user_prompt.push_str(snippet);
+                    user_prompt.push_str("\n---\n\n");
+                }
+            }
+        }
+        
+        user_prompt.push_str(&format!("{}\n{} {{", doc_comment.unwrap_or(""), signature));
 
         let full_prompt = format!("{}\n{}", system_prompt, user_prompt);
 

@@ -2,3 +2,4 @@
 load_keys.sh
 test.rs
 test2.rs
+.DS_Store

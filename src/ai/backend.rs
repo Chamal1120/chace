@@ -8,6 +8,7 @@ pub trait LLMBackend: Send + Sync {
         &self,
         signature: &str,
         doc_comment: Option<&str>,
+        context_snippets: Option<&[String]>,
         language: &str,
     ) -> Result<String>;
 }
