@@ -48,15 +48,22 @@ impl LLMBackend for GGPTOSSBackend {
         let client = Client::new();
 
         let system_prompt = format!(
-            "You are an AI {} code generator.\n\
-             Complete only the body of the function.\n\
-             Do NOT add explanations or markdown.\n\
-             Respond only with valid {} code inside the braces.",
+            "You are an expert pair-programmer and {} code generator.\n\n\
+            Your task is to **STRICTLY** complete only the body of the {} function provided in the prompt.\n\n\
+            ---\n\
+            **STRICT OUTPUT RULE:**\n\
+            1.  **Respond ONLY with the code that belongs inside the function body.**\n\
+            2.  **Do NOT include the curly braces.**
+            3.  Do NOT add any surrounding code fences (```), markdown formatting, explanations, or descriptive text.\n\
+            4.  The output must be the raw, executable code for the function body.\n\
+            ---\n\n\
+            ### Input Context:\n\
+            You will be provided with the function's signature, documentation (if available), and context snippets (if available) from the source file. Use these context snippets to understand the project structure and common utility functions.",
             language, language
         );
 
         let mut user_prompt = String::new();
-        
+
         if let Some(snippets) = context_snippets {
             if !snippets.is_empty() {
                 user_prompt.push_str("Context code for reference:\n");
@@ -67,8 +74,12 @@ impl LLMBackend for GGPTOSSBackend {
                 }
             }
         }
-        
-        user_prompt.push_str(&format!("{}\n{} {{", doc_comment.unwrap_or(""), signature));
+
+        user_prompt.push_str(&format!(
+            "{}\n{} {{",
+            doc_comment.unwrap_or(""),
+            signature
+        ));
 
         let url = format!("https://api.groq.com/openai/v1/chat/completions",);
 
@@ -92,7 +103,7 @@ impl LLMBackend for GGPTOSSBackend {
             .await?;
 
         let output = resp
-           .choices
+            .choices
             .get(0)
             .map(|c| c.message.content.clone())
             .unwrap_or_default();

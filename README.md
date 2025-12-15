@@ -1,8 +1,10 @@
-# CHACE
+<div style="text-align: left;">
+  <img src="logo/chace-logo.png" style="width:50%; margin: 0 auto;" />
+</div>
 
 *Pronounced: /tʃeɪs/ (chase)*
 
-**CHamal's AutoComplete Engine**
+**CH**amal's **A**uto**C**omplete **E**ngine
 
 ## Overview
 
