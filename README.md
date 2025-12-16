@@ -10,10 +10,10 @@
 
 CHACE is a Rust-based engine designed for controlled AI-assisted code completion. Unlike traditional AI coding assistants that generate large code blocks, CHACE:
 
-- lets you target empty function definitions at the cursor position
+- targets empty function definitions at the cursor position
 - Extracts the function signature and documentation (docstrings)
 - Sends only the minimal context to the LLM
-- Generates and inserts the function body
+- Retrive function implementations from the LLM with optimal token efficiency
 
 This approach keeps the AI focused on the specific task, reduces token usage, maintains precision and efficiency and produces more predictable results.
 
@@ -42,17 +42,10 @@ Currently supports:
 
 ## Installation
 
-### Prerequisites
-
-- Rust toolchain (2024 edition or later)
-- API keys for LLM providers
-
-### Build from Source
+### Install via Cargo
 
 ```bash
-git clone https://github.com/yourusername/chace.git
-cd chace
-cargo build --release
+cargo install chace
 ```
 
 ### Configuration
@@ -69,7 +62,7 @@ export GROQ_API_KEY="your-groq-api-key"
 ### Running the Server
 
 ```bash
-./target/release/chace
+chace
 ```
 
 The server listens on `/tmp/chace.sock` and handles concurrent connections.
@@ -103,7 +96,7 @@ CHACE is designed to be integrated with IDEs via plugins. See [chace.nvim](https
 
 ## Protocol
 
-CHACE uses a line-delimited JSON protocol over Unix sockets:
+CHACE uses a line-delimited JSON protocol over a Unix socket:
 
 - Each request is a single JSON object terminated by a newline
 - Each response is a single JSON object terminated by a newline
@@ -111,6 +104,14 @@ CHACE uses a line-delimited JSON protocol over Unix sockets:
 - Connections are handled asynchronously
 
 ## Development
+
+### Build from Source
+
+```bash
+git clone https://github.com/chamal1120/chace.git
+cd chace
+cargo build --release
+```
 
 ### Adding Language Support
 
