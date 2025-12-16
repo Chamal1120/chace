@@ -96,9 +96,11 @@ async fn handle_request(
     gemini: &Arc<GeminiBackend>,
     groq: &Arc<GGPTOSSBackend>,
 ) -> GenerateResponse {
-    use languages::rust_backend;
+    use languages::rust_backend::RustBackend;
+    use languages::language_standard::LanguageStandard;
 
-    let Some(func) = rust_backend::find_empty_function_at_cursor(
+    let backend = RustBackend;
+    let Some(func) = backend.find_empty_function_at_cursor(
         &req.source_code,
         req.cursor_byte,
     ) else {

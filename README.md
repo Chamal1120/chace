@@ -119,8 +119,9 @@ To add support for a new language:
 
 1. Add the Tree-sitter grammar to `Cargo.toml`
 2. Create a new backend in `src/languages/`
-3. Implement function detection and signature extraction
-4. Update the request handler in `main.rs`
+3. Implement the `LanguageStandard` trait with the following methods:
+4. Return `FunctionInfo` objects containing:
+5. Update the request handler in `main.rs`
 
 ### Adding LLM Backends
 
