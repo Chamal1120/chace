@@ -8,18 +8,18 @@
 
 ## Overview
 
-CHACE is a Rust-based engine designed for controlled AI-assisted code completion. Unlike traditional AI coding assistants that generate large code blocks, CHACE:
+CHACE is a Rust-based engine designed for controlled AI-assisted code completion. Traditional code completion tools like GitHub copilot or agents like cursor can haulicinate easily on large codebases when the context is misleading or too much. To mitigate that, CHACE:
 
 - targets empty function definitions at the cursor position
 - Extracts the function signature and documentation (docstrings)
 - Sends only the minimal context to the LLM
-- Retrive function implementations from the LLM with optimal token efficiency
+- Retrive only the function implementations from the LLM for optimal token efficiency
 
 This approach keeps the AI focused on the specific task, reduces token usage, maintains precision and efficiency and produces more predictable results.
 
 ### Inspiration
 
-CHACE is heavily inspired by ThePrimeagen's new approach to AI-assisted coding. While his implementation is built with Lua integrating Opencode (not yet open-sourced), CHACE takes a different architectural approach: built as a standalone Rust binary that operates independently and can be integrated into any editor through plugins. This design ensures CHACE is editor-agnostic, lightweight, and easy to extend to other development environments.
+The idea is heavily inspired by ThePrimeagen's new approach to AI-assisted coding. While his implementation is built with Lua integrating Opencode (not yet open-sourced), CHACE takes a different architectural approach: built as a standalone Rust binary that operates independently and can be integrated into any editor through plugins. This design ensures CHACE is editor-agnostic, lightweight, and easy to extend to other development environments.
 
 ## Architecture
 
