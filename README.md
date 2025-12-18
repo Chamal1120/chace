@@ -8,10 +8,10 @@
 
 ## Overview
 
-CHACE is a Rust-based engine designed for controlled AI-assisted code completion. Traditional code completion tools like GitHub copilot or agents like cursor can haulicinate easily on large codebases when the context is misleading or too much. To mitigate that, CHACE:
+CHACE is a Rust-based engine designed for controlled AI-assisted code completion. Traditional code completion tools like GitHub copilot or agents like cursor can hallucinate easily on large codebases when the context is misleading or too much. To mitigate that, CHACE:
 
-- targets empty function definitions at the cursor position
-- Extracts the function signature and documentation (docstrings)
+- targets function declerations with empty bodies at the cursor position
+- Extracts the function decleration and documentation (docstrings)
 - Sends only the minimal context to the LLM
 - Retrive only the function implementations from the LLM for optimal token efficiency
 
@@ -27,7 +27,7 @@ CHACE runs as a Unix socket server (`/tmp/chace.sock`) that accepts JSON request
 
 1. Parses the source code using Tree-sitter
 2. Locates empty functions at the cursor
-3. Sends function signatures to the configured LLM backend
+3. Sends function declerations to the configured LLM backend
 4. Returns the generated function body with precise byte offsets
 
 ### Supported LLM Backends
