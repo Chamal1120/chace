@@ -1,4 +1,5 @@
 use crate::ai::backend::LLMBackend;
+use crate::ai::helpers::clean_output;
 use anyhow::Result;
 use async_trait::async_trait;
 use reqwest::Client;
@@ -108,28 +109,6 @@ impl LLMBackend for GGPTOSSBackend {
             .map(|c| c.message.content.clone())
             .unwrap_or_default();
 
-        Ok(Self::clean_output(&output))
-    }
-}
-
-impl GGPTOSSBackend {
-    /// Cleanup of markdown/code fences, extra text
-    fn clean_output(output: &str) -> String {
-        let mut out = output.trim();
-
-        // Remove fences like ```rust
-        if out.starts_with("```") {
-            out = out.trim_start_matches("```");
-            if let Some(idx) = out.find('\n') {
-                out = &out[idx..];
-            }
-        }
-
-        // Remove ending ```
-        if out.ends_with("```") {
-            out = out.trim_end_matches("```");
-        }
-
-        out.trim().to_string()
+        Ok(clean_output(&output))
     }
 }

@@ -1,4 +1,5 @@
 use crate::ai::backend::LLMBackend;
+use crate::ai::helpers::clean_output;
 use anyhow::Result;
 use async_trait::async_trait;
 use reqwest::Client;
@@ -62,7 +63,7 @@ impl LLMBackend for GeminiBackend {
         );
 
         let mut user_prompt = String::new();
-        
+
         if let Some(snippets) = context_snippets {
             if !snippets.is_empty() {
                 user_prompt.push_str("Context code for reference:\n");
@@ -73,8 +74,12 @@ impl LLMBackend for GeminiBackend {
                 }
             }
         }
-        
-        user_prompt.push_str(&format!("{}\n{} {{", doc_comment.unwrap_or(""), signature));
+
+        user_prompt.push_str(&format!(
+            "{}\n{} {{",
+            doc_comment.unwrap_or(""),
+            signature
+        ));
 
         let full_prompt = format!("{}\n{}", system_prompt, user_prompt);
 
@@ -108,28 +113,6 @@ impl LLMBackend for GeminiBackend {
             .map(|p| p.text.clone())
             .unwrap_or_default();
 
-        Ok(Self::clean_output(&output))
-    }
-}
-
-impl GeminiBackend {
-    /// Cleanup of markdown/code fences, extra text
-    fn clean_output(output: &str) -> String {
-        let mut out = output.trim();
-
-        // Remove fences like ```rust
-        if out.starts_with("```") {
-            out = out.trim_start_matches("```");
-            if let Some(idx) = out.find('\n') {
-                out = &out[idx..];
-            }
-        }
-
-        // Remove ending ```
-        if out.ends_with("```") {
-            out = out.trim_end_matches("```");
-        }
-
-        out.trim().to_string()
+        Ok(clean_output(&output))
     }
 }
