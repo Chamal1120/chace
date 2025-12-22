@@ -19,7 +19,7 @@ This approach keeps the AI focused on the specific task, reduces token usage, ma
 
 ### Inspiration
 
-The idea is heavily inspired by ThePrimeagen's new approach to AI-assisted coding. While his implementation is built with Lua integrating Opencode (not yet open-sourced), CHACE takes a different architectural approach: built as a standalone Rust binary that operates independently and can be integrated into any editor through plugins. This design ensures CHACE is editor-agnostic, lightweight, and easy to extend to other development environments.
+The idea is heavily inspired by ThePrimeagen's new approach to AI-assisted coding. While his implementation is built with Lua and requires Opencode to work (not yet open-sourced), I took a different architectural approach: built as a standalone Rust binary that operates independently and can be integrated into any editor through plugins. This design ensures the core application to be editor-agnostic, lightweight, and easy to extend to other development environments.
 
 ## Architecture
 
@@ -75,9 +75,13 @@ Send JSON-encoded requests via the Unix socket:
 {
   "source_code": "fn add(a: i32, b: i32) -> i32 {\n\n}",
   "cursor_byte": 35,
-  "backend": "Gemini"
+  "backend": "Gemini",
+  "context_snippets": ["struct User {\n  id: u32,\n  name: String\n}"]
 }
 ```
+
+**Optional Fields:**
+- `context_snippets` (array of strings): Additional code snippets to provide context for better code generation
 
 ### Response Format
 
@@ -90,13 +94,16 @@ Send JSON-encoded requests via the Unix socket:
 }
 ```
 
+**Optional Fields:**
+- `error` (string or null): Error message if the request failed, null on success
+
 ### IDE Integration
 
-CHACE is designed to be integrated with IDEs via plugins. See [chace.nvim](https://github.com/chamal1120/chace-nvim) for reference.
+CHACE is designed to be integrated with IDEs via plugins. See [chace.nvim](https://github.com/chamal1120/chace.nvim) for reference.
 
 ## Protocol
 
-CHACE uses a line-delimited JSON protocol over a Unix socket:
+CHACE uses a line-delimited JSON protocol via a Unix socket:
 
 - Each request is a single JSON object terminated by a newline
 - Each response is a single JSON object terminated by a newline
