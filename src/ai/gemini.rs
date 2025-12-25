@@ -1,4 +1,4 @@
-use crate::ai::backend::LLMBackend;
+use crate::ai::backend::{LLMBackend, LLMResponse, TokenUsage};
 use crate::ai::helpers::clean_output;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -27,8 +27,20 @@ struct GeminiPart<'a> {
 }
 
 #[derive(Deserialize)]
+struct GeminiUsage {
+    #[serde(rename = "promptTokenCount")]
+    prompt_token_count: u32,
+    #[serde(rename = "candidatesTokenCount")]
+    candidates_token_count: u32,
+    #[serde(rename = "totalTokenCount")]
+    total_token_count: u32,
+}
+
+#[derive(Deserialize)]
 struct GeminiResponse {
     candidates: Vec<GeminiCandidate>,
+    #[serde(rename = "usageMetadata")] // Gemini uses camelCase
+    usage_metadata: GeminiUsage,
 }
 #[derive(Deserialize)]
 struct GeminiCandidate {
@@ -51,7 +63,7 @@ impl LLMBackend for GeminiBackend {
         doc_comment: Option<&str>,
         context_snippets: Option<&[String]>,
         language: &str,
-    ) -> Result<String> {
+    ) -> Result<LLMResponse> {
         let client = Client::new();
 
         let system_prompt = format!(
@@ -113,6 +125,13 @@ impl LLMBackend for GeminiBackend {
             .map(|p| p.text.clone())
             .unwrap_or_default();
 
-        Ok(clean_output(&output))
+        Ok(LLMResponse {
+            body: clean_output(&output),
+            usage: Some(TokenUsage {
+                prompt_tokens: resp.usage_metadata.prompt_token_count,
+                completion_tokens: resp.usage_metadata.candidates_token_count,
+                total_tokens: resp.usage_metadata.total_token_count,
+            }),
+        })
     }
 }

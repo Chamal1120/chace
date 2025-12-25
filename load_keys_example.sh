@@ -1,0 +1,3 @@
+#!/bin/bash
+export GEMINI_API_KEY=""
+export GROQ_API_KEY=""

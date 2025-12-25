@@ -1,4 +1,4 @@
-use crate::ai::backend::LLMBackend;
+use crate::ai::backend::{LLMBackend, LLMResponse, TokenUsage};
 use crate::ai::helpers::clean_output;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -25,6 +25,14 @@ struct GROQRequest<'a> {
 #[derive(Deserialize)]
 struct GGPTOSSResponse {
     choices: Vec<Choice>,
+    usage: Usage,
+}
+
+#[derive(Deserialize)]
+struct Usage {
+    prompt_tokens: u32,
+    completion_tokens: u32,
+    total_tokens: u32,
 }
 
 #[derive(Deserialize)]
@@ -45,7 +53,7 @@ impl LLMBackend for GGPTOSSBackend {
         doc_comment: Option<&str>,
         context_snippets: Option<&[String]>,
         language: &str,
-    ) -> Result<String> {
+    ) -> Result<LLMResponse> {
         let client = Client::new();
 
         let system_prompt = format!(
@@ -109,6 +117,13 @@ impl LLMBackend for GGPTOSSBackend {
             .map(|c| c.message.content.clone())
             .unwrap_or_default();
 
-        Ok(clean_output(&output))
+        Ok(LLMResponse {
+            body: clean_output(&output),
+            usage: Some(TokenUsage {
+                prompt_tokens: resp.usage.prompt_tokens,
+                completion_tokens: resp.usage.completion_tokens,
+                total_tokens: resp.usage.total_tokens,
+            }),
+        })
     }
 }

@@ -1,6 +1,6 @@
 mod ai;
 mod languages;
-use ai::backend::LLMBackend;
+use ai::backend::{ LLMBackend, TokenUsage };
 use ai::gemini::GeminiBackend;
 use ai::groq_gpt_oss::GGPTOSSBackend;
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,7 @@ struct GenerateResponse {
     start_byte: usize,
     end_byte: usize,
     body: String,
+    usage: Option<TokenUsage>,
     error: Option<String>,
 }
 
@@ -108,6 +109,7 @@ async fn handle_request(
             start_byte: 0,
             end_byte: 0,
             body: String::new(),
+            usage: None,
             error: Some("No empty function".into()),
         };
     };
@@ -120,6 +122,7 @@ async fn handle_request(
                 start_byte: 0,
                 end_byte: 0,
                 body: String::new(),
+                usage: None,
                 error: Some("Unknown backend".into()),
             };
         }
@@ -134,16 +137,18 @@ async fn handle_request(
         )
         .await
     {
-        Ok(body) => GenerateResponse {
+        Ok(res) => GenerateResponse {
             start_byte: func.start_byte,
             end_byte: func.end_byte,
-            body,
+            body: res.body,
+            usage: res.usage,
             error: None,
         },
         Err(e) => GenerateResponse {
             start_byte: func.start_byte,
             end_byte: func.end_byte,
             body: String::new(),
+            usage: None,
             error: Some(e.to_string()),
         },
     }
