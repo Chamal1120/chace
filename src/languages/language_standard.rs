@@ -8,7 +8,7 @@ pub struct FunctionInfo {
 }
 
 /// Trait for language-specific backend implementations
-pub trait LanguageStandard {
+pub trait LanguageStandard: Send + Sync {
     /// Finds an empty function at the cursor position and returns its information
     fn find_empty_function_at_cursor(
         &self,

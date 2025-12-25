@@ -32,11 +32,16 @@ pub fn extract_doc_comment(
                 let text = text_for(source, &sibling).trim().to_string();
 
                 if text.starts_with(comment_prefix) {
-                    comments.push(
-                        text.trim_start_matches(comment_prefix)
-                            .trim()
-                            .to_string(),
-                    );
+                    if comment_prefix == "/**" && comment_prefix == "/*" {
+                        let cleaned = clean_jsdoc(&text);
+                        comments.push(cleaned);
+                    } else {
+                        comments.push(
+                            text.trim_start_matches(comment_prefix)
+                                .trim()
+                                .to_string(),
+                        );
+                    }
                 } else {
                     break;
                 }
@@ -60,4 +65,16 @@ pub fn extract_doc_comment(
 /// Checks if a function body contains only whitespace and braces
 pub fn is_empty_body(body_text: &str) -> bool {
     body_text.chars().all(|c| c.is_whitespace() || c == '{' || c == '}')
+}
+
+fn clean_jsdoc(text: &str) -> String {
+    text.trim_start_matches("/**")
+        .trim_end_matches("*/")
+        .lines()
+        .map(|line| {
+            line.trim().trim_start_matches("*").trim().to_string()
+        })
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
 }

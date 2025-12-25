@@ -14,6 +14,7 @@ struct GenerateRequest {
     source_code: String,
     cursor_byte: usize,
     backend: String,
+    file_type: String, 
     #[serde(default)]
     context_snippets: Option<Vec<String>>,
 }
@@ -98,9 +99,25 @@ async fn handle_request(
     groq: &Arc<GGPTOSSBackend>,
 ) -> GenerateResponse {
     use languages::rust_backend::RustBackend;
+    use languages::ts_backend::TsBackend;
     use languages::language_standard::LanguageStandard;
 
-    let backend = RustBackend;
+    let backend_opt: Option<Box<dyn LanguageStandard + Send>> = match req.file_type.as_str() {
+        "rust" => Some(Box::new(RustBackend)),
+        "ts"| "typescript" => Some(Box::new(TsBackend)),
+        _ => None,
+    };
+
+    let Some(backend) = backend_opt else {
+        return GenerateResponse {
+            start_byte: 0,
+            end_byte: 0,
+            body: String::new(),
+            usage: None,
+            error: Some("Unsupported language".into()),
+        };
+    };
+
     let Some(func) = backend.find_empty_function_at_cursor(
         &req.source_code,
         req.cursor_byte,
@@ -133,7 +150,7 @@ async fn handle_request(
             &func.signature,
             func.doc_comment.as_deref(),
             req.context_snippets.as_deref(),
-            "rust",
+            req.file_type.as_ref(),
         )
         .await
     {

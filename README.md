@@ -39,6 +39,7 @@ CHACE runs as a Unix socket server (`/tmp/chace.sock`) that accepts JSON request
 
 Currently supports:
 - Rust
+- TypeScript
 
 ## Installation
 
@@ -90,6 +91,11 @@ Send JSON-encoded requests via the Unix socket:
   "start_byte": 35,
   "end_byte": 36,
   "body": "    a + b",
+  "usage": {
+     "prompt_tokens": 300,
+     "completion_tokens": 1200,
+     "total_tokens": 1500
+    }
   "error": null
 }
 ```
