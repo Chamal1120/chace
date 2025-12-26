@@ -3,11 +3,11 @@ use crate::languages::helpers::{
 };
 use crate::languages::language_standard::{FunctionInfo, LanguageStandard};
 use tree_sitter::Parser;
-use tree_sitter_typescript;
+use tree_sitter_javascript;
 
-pub struct TsBackend;
+pub struct JsxBackend;
 
-impl LanguageStandard for TsBackend {
+impl LanguageStandard for JsxBackend {
     fn find_empty_function_at_cursor(
         &self,
         source_code: &str,
@@ -15,7 +15,7 @@ impl LanguageStandard for TsBackend {
     ) -> Option<FunctionInfo> {
         let mut parser = Parser::new();
         parser
-            .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
+            .set_language(&tree_sitter_javascript::LANGUAGE.into())
             .expect("Failed to load Typescript grammar");
 
         let tree = parser.parse(source_code, None)?;
@@ -24,36 +24,39 @@ impl LanguageStandard for TsBackend {
 
         for node in root.children(&mut cursor) {
             let kind = node.kind();
-            if kind != "function_declaration" && kind != "method_definition" {
-                continue;
-            }
 
-            // Check if the cursor is inside the function
+            // Check bounds first to save processing
             if cursor_byte < node.start_byte() || cursor_byte > node.end_byte()
             {
                 continue;
             }
-
-            // Check if empty
-            let body = match node.child_by_field_name("body") {
-                Some(body_node) => text_for(source_code, &body_node),
-                None => continue,
+            // Identify the "real" function node
+            let target_node = match kind {
+                "function_declaration" | "method_definition" => Some(node),
+                "export_statement" | "lexical_declaration" => {
+                    find_arrow_recursive(node)
+                }
+                _ => None,
             };
-            if !is_empty_body(body) {
-                continue;
+
+            if let Some(func_node) = target_node {
+                if let Some(body_node) = func_node.child_by_field_name("body") {
+                    let body_text = text_for(source_code, &body_node);
+
+                    if is_empty_body(body_text) {
+                        return Some(FunctionInfo {
+                            signature: extract_signature(&node, source_code),
+                            doc_comment: extract_doc_comment(
+                                &node,
+                                source_code,
+                                "/**",
+                            ),
+                            start_byte: body_node.start_byte() + 1,
+                            end_byte: body_node.end_byte() - 1,
+                        });
+                    }
+                }
             }
-
-            let body_node = node.child_by_field_name("body").unwrap();
-
-            let signature = extract_signature(&node, source_code);
-            let doc_comment = extract_doc_comment(&node, source_code, "/**");
-
-            return Some(FunctionInfo {
-                signature,
-                doc_comment,
-                start_byte: body_node.start_byte() + 1,
-                end_byte: body_node.end_byte() - 1,
-            });
         }
 
         None
@@ -63,8 +66,8 @@ impl LanguageStandard for TsBackend {
         let mut parser = Parser::new();
 
         parser
-            .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
-            .expect("Error loading Typescript grammar");
+            .set_language(&tree_sitter_javascript::LANGUAGE.into())
+            .expect("Error loading Javascriptreact grammar");
 
         let tree = parser.parse(source_code, None).unwrap();
         let root_node = tree.root_node();
@@ -99,6 +102,21 @@ impl LanguageStandard for TsBackend {
     }
 }
 
+//---------------------- Backend specific helpers -----------------------------
+
+fn find_arrow_recursive(node: tree_sitter::Node) -> Option<tree_sitter::Node> {
+    if node.kind() == "arrow_function" {
+        return Some(node);
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(found) = find_arrow_recursive(child) {
+            return Some(found);
+        }
+    }
+    None
+}
+
 //-----------------------------Unit Tests--------------------------------------
 
 #[cfg(test)]
@@ -107,12 +125,12 @@ mod tests {
 
     #[test]
     fn test_find_simple_empty_function() {
-        let backend = TsBackend;
+        let backend = JsxBackend;
         let code = r#"
 /**
  * This is a test function
  */
-function helloWorld(name: string): string {
+function helloWorld(name) {
 }"#;
         let cursor_byte = code.find('}').unwrap() - 1;
         
@@ -121,7 +139,7 @@ function helloWorld(name: string): string {
         assert!(result.is_some(), "Should find the empty function");
         let info = result.unwrap();
         
-        assert_eq!(info.signature, "function helloWorld(name: string): string");
+        assert_eq!(info.signature, "function helloWorld(name)");
         assert_eq!(info.doc_comment, Some("This is a test function".to_string()));
         
         let body_content = &code[info.start_byte..info.end_byte];
@@ -129,25 +147,28 @@ function helloWorld(name: string): string {
     }
 
     #[test]
-    fn test_find_function_with_complex_signature() {
-        let backend = TsBackend;
+    fn test_find_arrow_function() {
+        let backend = JsxBackend;
         let code = r#"
 /**
- * Multi-line doc
- * second line
+ * Arrow function test
  */
-async function fetchData<T>(url: T): Promise<Uint8Array> {
+export const myFunc = (x) => {
 }"#;
-        let cursor_byte = code.find('{').unwrap() + 1;
-        let result = backend.find_empty_function_at_cursor(code, cursor_byte).unwrap();
+        let cursor_byte = code.find('}').unwrap() - 1;
         
-        assert!(result.signature.contains("async function fetchData"));
-        assert_eq!(result.doc_comment, Some("Multi-line doc\nsecond line".to_string()));
+        let result = backend.find_empty_function_at_cursor(code, cursor_byte);
+        
+        assert!(result.is_some(), "Should find the empty arrow function");
+        let info = result.unwrap();
+        
+        assert!(info.signature.contains("export const myFunc"));
+        assert_eq!(info.doc_comment, Some("Arrow function test".to_string()));
     }
 
     #[test]
     fn test_ignores_populated_function() {
-        let backend = TsBackend;
+        let backend = JsxBackend;
         let code = r#"function hasCode() { console.log("hi"); }"#;
         let cursor_byte = code.find('c').unwrap();
         
@@ -157,7 +178,7 @@ async function fetchData<T>(url: T): Promise<Uint8Array> {
 
     #[test]
     fn test_cursor_outside_function() {
-        let backend = TsBackend;
+        let backend = JsxBackend;
         let code = "function empty() {} \n // cursor is here";
         let cursor_byte = code.len() - 1;
         

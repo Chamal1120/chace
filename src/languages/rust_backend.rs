@@ -97,3 +97,71 @@ impl LanguageStandard for RustBackend {
         funcs
     }
 }
+
+//-----------------------------Unit Tests--------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_find_simple_empty_function() {
+        let backend = RustBackend;
+        let code = r#"
+/// This is a test function
+fn hello_world(name: &str) -> String {
+}"#;
+        // Place cursor inside the braces
+        let cursor_byte = code.find('}').unwrap() - 1;
+        
+        let result = backend.find_empty_function_at_cursor(code, cursor_byte);
+        
+        assert!(result.is_some(), "Should find the empty function");
+        let info = result.unwrap();
+        
+        assert_eq!(info.signature, "fn hello_world(name: &str) -> String");
+        assert_eq!(info.doc_comment, Some("This is a test function".to_string()));
+        
+        // Check that start/end bytes are exactly between the braces
+        let body_content = &code[info.start_byte..info.end_byte];
+        assert!(body_content.trim().is_empty());
+    }
+
+    #[test]
+    fn test_find_function_with_complex_signature() {
+        let backend = RustBackend;
+        let code = r#"
+/// Multi-line doc
+/// second line
+pub async fn fetch_data<'a, T>(url: T) -> Result<Vec<u8>, Error> 
+where T: Into<String> 
+{
+}"#;
+        let cursor_byte = code.find('{').unwrap() + 1;
+        let result = backend.find_empty_function_at_cursor(code, cursor_byte).unwrap();
+        
+        assert!(result.signature.contains("pub async fn fetch_data"));
+        assert!(result.signature.contains("where T: Into<String>"));
+        assert_eq!(result.doc_comment, Some("Multi-line doc\nsecond line".to_string()));
+    }
+
+    #[test]
+    fn test_ignores_populated_function() {
+        let backend = RustBackend;
+        let code = "fn has_code() { println!(\"hi\"); }";
+        let cursor_byte = code.find('p').unwrap(); // Cursor on println
+        
+        let result = backend.find_empty_function_at_cursor(code, cursor_byte);
+        assert!(result.is_none(), "Should ignore functions with bodies");
+    }
+
+    #[test]
+    fn test_cursor_outside_function() {
+        let backend = RustBackend;
+        let code = "fn empty() {} \n // cursor is here";
+        let cursor_byte = code.len() - 1;
+        
+        let result = backend.find_empty_function_at_cursor(code, cursor_byte);
+        assert!(result.is_none(), "Should ignore if cursor is outside bounds");
+    }
+}

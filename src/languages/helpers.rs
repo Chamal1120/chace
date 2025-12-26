@@ -7,13 +7,29 @@ pub fn text_for<'a>(source: &'a str, node: &Node) -> &'a str {
 
 /// Extracts function signature (everything before the body)
 pub fn extract_signature(node: &Node, source: &str) -> String {
-    let body_node =
-        node.child_by_field_name("body").expect("Function has no body");
+    let body_node = find_body_recursive(*node);
 
     let start = node.start_byte();
-    let end = body_node.start_byte();
+    let end = match body_node {
+        Some(b) => b.start_byte(),
+        None => node.end_byte(),
+    };
 
     source[start..end].trim().to_string()
+}
+
+/// Recursive helper to find a "body" field anywhere inside a node
+fn find_body_recursive(node: Node) -> Option<Node> {
+    if let Some(body) = node.child_by_field_name("body") {
+        return Some(body);
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(found) = find_body_recursive(child) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 /// Extracts documentation comment for a node
@@ -27,29 +43,26 @@ pub fn extract_doc_comment(
     let mut current = node.prev_sibling();
 
     while let Some(sibling) = current {
-        match sibling.kind() {
-            "line_comment" => {
-                let text = text_for(source, &sibling).trim().to_string();
+        let kind = sibling.kind();
+        if kind == "line_comment" || kind == "comment" {
+            let text = text_for(source, &sibling).trim().to_string();
 
-                if text.starts_with(comment_prefix) {
-                    if comment_prefix == "/**" && comment_prefix == "/*" {
-                        let cleaned = clean_jsdoc(&text);
-                        comments.push(cleaned);
-                    } else {
-                        comments.push(
-                            text.trim_start_matches(comment_prefix)
-                                .trim()
-                                .to_string(),
-                        );
-                    }
+            if text.starts_with(comment_prefix) {
+                if text.starts_with("/**") {
+                    let cleaned = clean_jsdoc(&text);
+                    comments.push(cleaned);
                 } else {
-                    break;
+                    comments.push(
+                        text.trim_start_matches(comment_prefix)
+                            .trim()
+                            .to_string(),
+                    );
                 }
-            }
-
-            _ => {
+            } else {
                 break;
             }
+        } else {
+            break;
         }
         current = sibling.prev_sibling();
     }
@@ -78,3 +91,4 @@ fn clean_jsdoc(text: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+

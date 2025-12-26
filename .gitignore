@@ -2,5 +2,8 @@
 load_keys.sh
 test.rs
 test2.rs
-test3.ts
+*.ts
+*.tsx
+*.js
+*.jsx
 .DS_Store

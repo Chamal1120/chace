@@ -51,7 +51,7 @@ jobs:
         run: cargo build --release --locked --verbose
 
       - name: Run tests
-        run: cargo test --locked --verbose
+        run: cargo test --bins --locked --verbose
 
       - name: Publish to crates.io
         run: cargo publish --locked --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -62,3 +62,5 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
+          files: |
+            target/release/chace

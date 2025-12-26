@@ -1,4 +1,4 @@
-/// Information about a function extracted from the source code
+/// Information about the function extracted from the source code
 #[derive(Debug)]
 pub struct FunctionInfo {
     pub signature: String,

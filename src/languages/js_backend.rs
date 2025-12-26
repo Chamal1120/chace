@@ -3,11 +3,11 @@ use crate::languages::helpers::{
 };
 use crate::languages::language_standard::{FunctionInfo, LanguageStandard};
 use tree_sitter::Parser;
-use tree_sitter_typescript;
+use tree_sitter_javascript;
 
-pub struct TsBackend;
+pub struct JsBackend;
 
-impl LanguageStandard for TsBackend {
+impl LanguageStandard for JsBackend {
     fn find_empty_function_at_cursor(
         &self,
         source_code: &str,
@@ -15,8 +15,8 @@ impl LanguageStandard for TsBackend {
     ) -> Option<FunctionInfo> {
         let mut parser = Parser::new();
         parser
-            .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
-            .expect("Failed to load Typescript grammar");
+            .set_language(&tree_sitter_javascript::LANGUAGE.into())
+            .expect("Failed to load Javascript grammar");
 
         let tree = parser.parse(source_code, None)?;
         let root = tree.root_node();
@@ -63,8 +63,8 @@ impl LanguageStandard for TsBackend {
         let mut parser = Parser::new();
 
         parser
-            .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
-            .expect("Error loading Typescript grammar");
+            .set_language(&tree_sitter_javascript::LANGUAGE.into())
+            .expect("Error loading Javascript grammar");
 
         let tree = parser.parse(source_code, None).unwrap();
         let root_node = tree.root_node();
@@ -107,12 +107,12 @@ mod tests {
 
     #[test]
     fn test_find_simple_empty_function() {
-        let backend = TsBackend;
+        let backend = JsBackend;
         let code = r#"
 /**
  * This is a test function
  */
-function helloWorld(name: string): string {
+function helloWorld(name) {
 }"#;
         let cursor_byte = code.find('}').unwrap() - 1;
         
@@ -121,7 +121,7 @@ function helloWorld(name: string): string {
         assert!(result.is_some(), "Should find the empty function");
         let info = result.unwrap();
         
-        assert_eq!(info.signature, "function helloWorld(name: string): string");
+        assert_eq!(info.signature, "function helloWorld(name)");
         assert_eq!(info.doc_comment, Some("This is a test function".to_string()));
         
         let body_content = &code[info.start_byte..info.end_byte];
@@ -129,14 +129,14 @@ function helloWorld(name: string): string {
     }
 
     #[test]
-    fn test_find_function_with_complex_signature() {
-        let backend = TsBackend;
+    fn test_find_async_function() {
+        let backend = JsBackend;
         let code = r#"
 /**
  * Multi-line doc
  * second line
  */
-async function fetchData<T>(url: T): Promise<Uint8Array> {
+async function fetchData(url) {
 }"#;
         let cursor_byte = code.find('{').unwrap() + 1;
         let result = backend.find_empty_function_at_cursor(code, cursor_byte).unwrap();
@@ -147,7 +147,7 @@ async function fetchData<T>(url: T): Promise<Uint8Array> {
 
     #[test]
     fn test_ignores_populated_function() {
-        let backend = TsBackend;
+        let backend = JsBackend;
         let code = r#"function hasCode() { console.log("hi"); }"#;
         let cursor_byte = code.find('c').unwrap();
         
@@ -157,7 +157,7 @@ async function fetchData<T>(url: T): Promise<Uint8Array> {
 
     #[test]
     fn test_cursor_outside_function() {
-        let backend = TsBackend;
+        let backend = JsBackend;
         let code = "function empty() {} \n // cursor is here";
         let cursor_byte = code.len() - 1;
         

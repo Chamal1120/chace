@@ -1,10 +1,13 @@
 <div style="text-align: left;">
-  <img src="logo/chace-logo.png" style="width:50%; margin: 0 auto;" />
+  <img src="assets/chace-logo.png" style="width:50%; margin: 0 auto;" />
 </div>
 
 *Pronounced: /tʃeɪs/ (chase)*
 
 **CH**amal's **A**uto**C**omplete **E**ngine
+
+> [!WARNING]
+> CHACE is still at early development so bugs and breaking changes should be expected.
 
 ## Overview
 
@@ -39,7 +42,8 @@ CHACE runs as a Unix socket server (`/tmp/chace.sock`) that accepts JSON request
 
 Currently supports:
 - Rust
-- TypeScript
+- TypeScript/ TypeScript XML
+- JavaScript/ JavaScript XML
 
 ## Installation
 
@@ -144,6 +148,10 @@ To add a new LLM provider:
 2. Implement the `LLMBackend` trait
 3. Add initialization in `main.rs`
 4. Update the backend selection logic
+
+### Testing
+
+refer [tests](tests/README.md).
 
 ## License
 

@@ -5,9 +5,9 @@ use crate::languages::language_standard::{FunctionInfo, LanguageStandard};
 use tree_sitter::Parser;
 use tree_sitter_typescript;
 
-pub struct TsBackend;
+pub struct TsxBackend;
 
-impl LanguageStandard for TsBackend {
+impl LanguageStandard for TsxBackend {
     fn find_empty_function_at_cursor(
         &self,
         source_code: &str,
@@ -15,7 +15,7 @@ impl LanguageStandard for TsBackend {
     ) -> Option<FunctionInfo> {
         let mut parser = Parser::new();
         parser
-            .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
+            .set_language(&tree_sitter_typescript::LANGUAGE_TSX.into())
             .expect("Failed to load Typescript grammar");
 
         let tree = parser.parse(source_code, None)?;
@@ -24,36 +24,41 @@ impl LanguageStandard for TsBackend {
 
         for node in root.children(&mut cursor) {
             let kind = node.kind();
-            if kind != "function_declaration" && kind != "method_definition" {
-                continue;
-            }
 
-            // Check if the cursor is inside the function
+            // Check bounds first to save processing
             if cursor_byte < node.start_byte() || cursor_byte > node.end_byte()
             {
                 continue;
             }
-
-            // Check if empty
-            let body = match node.child_by_field_name("body") {
-                Some(body_node) => text_for(source_code, &body_node),
-                None => continue,
+            // Identify the "real" function node
+            let target_node = match kind {
+                "function_declaration" | "method_definition" => Some(node),
+                "export_statement" | "lexical_declaration" => {
+                    find_arrow_recursive(node)
+                }
+                _ => None,
             };
-            if !is_empty_body(body) {
-                continue;
+
+            if let Some(func_node) = target_node {
+                if let Some(body_node) = func_node.child_by_field_name("body") {
+                    let body_text = text_for(source_code, &body_node);
+
+                    if is_empty_body(body_text) {
+                        // IMPORTANT: We use the 'node' (the outermost one) for signature/docs
+                        // so we get 'export const ...' and not just '() =>'
+                        return Some(FunctionInfo {
+                            signature: extract_signature(&node, source_code),
+                            doc_comment: extract_doc_comment(
+                                &node,
+                                source_code,
+                                "/**",
+                            ),
+                            start_byte: body_node.start_byte() + 1,
+                            end_byte: body_node.end_byte() - 1,
+                        });
+                    }
+                }
             }
-
-            let body_node = node.child_by_field_name("body").unwrap();
-
-            let signature = extract_signature(&node, source_code);
-            let doc_comment = extract_doc_comment(&node, source_code, "/**");
-
-            return Some(FunctionInfo {
-                signature,
-                doc_comment,
-                start_byte: body_node.start_byte() + 1,
-                end_byte: body_node.end_byte() - 1,
-            });
         }
 
         None
@@ -63,8 +68,8 @@ impl LanguageStandard for TsBackend {
         let mut parser = Parser::new();
 
         parser
-            .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
-            .expect("Error loading Typescript grammar");
+            .set_language(&tree_sitter_typescript::LANGUAGE_TSX.into())
+            .expect("Error loading Typescriptreact grammar");
 
         let tree = parser.parse(source_code, None).unwrap();
         let root_node = tree.root_node();
@@ -99,6 +104,21 @@ impl LanguageStandard for TsBackend {
     }
 }
 
+//---------------------- Backend specific helpers -----------------------------
+
+fn find_arrow_recursive(node: tree_sitter::Node) -> Option<tree_sitter::Node> {
+    if node.kind() == "arrow_function" {
+        return Some(node);
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(found) = find_arrow_recursive(child) {
+            return Some(found);
+        }
+    }
+    None
+}
+
 //-----------------------------Unit Tests--------------------------------------
 
 #[cfg(test)]
@@ -107,7 +127,7 @@ mod tests {
 
     #[test]
     fn test_find_simple_empty_function() {
-        let backend = TsBackend;
+        let backend = TsxBackend;
         let code = r#"
 /**
  * This is a test function
@@ -129,8 +149,28 @@ function helloWorld(name: string): string {
     }
 
     #[test]
+    fn test_find_arrow_function() {
+        let backend = TsxBackend;
+        let code = r#"
+/**
+ * Arrow function test
+ */
+export const myFunc = (x: number): JSX.Element => {
+}"#;
+        let cursor_byte = code.find('}').unwrap() - 1;
+        
+        let result = backend.find_empty_function_at_cursor(code, cursor_byte);
+        
+        assert!(result.is_some(), "Should find the empty arrow function");
+        let info = result.unwrap();
+        
+        assert!(info.signature.contains("export const myFunc"));
+        assert_eq!(info.doc_comment, Some("Arrow function test".to_string()));
+    }
+
+    #[test]
     fn test_find_function_with_complex_signature() {
-        let backend = TsBackend;
+        let backend = TsxBackend;
         let code = r#"
 /**
  * Multi-line doc
@@ -147,7 +187,7 @@ async function fetchData<T>(url: T): Promise<Uint8Array> {
 
     #[test]
     fn test_ignores_populated_function() {
-        let backend = TsBackend;
+        let backend = TsxBackend;
         let code = r#"function hasCode() { console.log("hi"); }"#;
         let cursor_byte = code.find('c').unwrap();
         
@@ -157,7 +197,7 @@ async function fetchData<T>(url: T): Promise<Uint8Array> {
 
     #[test]
     fn test_cursor_outside_function() {
-        let backend = TsBackend;
+        let backend = TsxBackend;
         let code = "function empty() {} \n // cursor is here";
         let cursor_byte = code.len() - 1;
         

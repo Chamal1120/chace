@@ -41,12 +41,13 @@ async fn main() -> anyhow::Result<()> {
         model: "openai/gpt-oss-20b".to_string(),
     });
 
-    let path = "/tmp/chace.sock";
-    if Path::new(path).exists() {
-        std::fs::remove_file(path)?;
+    let path = std::env::var("SOCKET_PATH").unwrap_or_else(|_| "/tmp/chace.sock".to_string());
+    if Path::new(&path).exists() {
+        std::fs::remove_file(&path)?;
     }
 
-    let listener = UnixListener::bind(path)?;
+    let listener = UnixListener::bind(&path)?;
+    println!("Listening on {}", path);
 
     loop {
         let (socket, _) = listener.accept().await?;
@@ -100,11 +101,17 @@ async fn handle_request(
 ) -> GenerateResponse {
     use languages::rust_backend::RustBackend;
     use languages::ts_backend::TsBackend;
+    use languages::tsx_backend::TsxBackend;
+    use languages::js_backend::JsBackend;
+    use languages::jsx_backend::JsxBackend;
     use languages::language_standard::LanguageStandard;
 
     let backend_opt: Option<Box<dyn LanguageStandard + Send>> = match req.file_type.as_str() {
         "rust" => Some(Box::new(RustBackend)),
         "ts"| "typescript" => Some(Box::new(TsBackend)),
+        "tsx"| "typescriptreact" => Some(Box::new(TsxBackend)),
+        "js"| "javascript" => Some(Box::new(JsBackend)),
+        "jsx"| "javascriptreact" => Some(Box::new(JsxBackend)),
         _ => None,
     };
 
